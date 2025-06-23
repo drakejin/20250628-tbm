@@ -1,0 +1,79 @@
+name: Fileservice Production Deployment
+env:
+  AWS_ACCESS_KEY_ID: ${{ secrets.TBM20250628_AWS_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.TBM20250628_AWS_SECRET_ACCESS_KEY }}
+  AWS_REGION: 'ap-northeast-2'
+  SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL_DRAKEJIN_TBM20250628_DEPLOY_PROD }}
+
+
+  CONTAINER_NAME: tbm20250628-application
+  FAMILY_NAME: tbm20250628-application_prod
+
+  ECS_CLUSTER_NAME: tbm20250628-service-prod
+  ECS_SERVICE_NAME: tbm20250628-application
+  ECR_REPOSITORY_NAME: drakejin/tbm20250628
+
+on:
+  push:
+    paths:
+      - 'application/**'
+      - '.github/workflows/ecs_application_deploy.yml'
+    # branches:
+    #   - feature/ffmpeg_service
+jobs:
+  build_and_deploy:
+    permissions: read-all
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1-node16
+        with:
+          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Build, tag, and push image to Amazon ECR
+        id: build-image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY_NAME: ${{ env.ECR_REPOSITORY_NAME }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY_NAME:$IMAGE_TAG -t $ECR_REGISTRY/$ECR_REPOSITORY_NAME:latest .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY_NAME --all-tags
+          echo "image=$ECR_REGISTRY/$ECR_REPOSITORY_NAME:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+      - name: Fill in the new image ID in the Amazon ECS task definition
+        id: render-app-container
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task_definition.prod.json # aws ecs describe-task-definition --task-definition lamapi-prod-lamapi | jq -M ".taskDefinition" > task_definition.prod.json
+          container-name: ${{ env.CONTAINER_NAME }}
+          image: ${{ steps.build-image.outputs.image }}
+          environment-variables: "LOG_LEVEL=debug"
+
+      - name: Deploy Amazon ECS task definition
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+        with:
+          task-definition: ${{ steps.render-app-container.outputs.task-definition }}
+          service: ${{ env.ECS_SERVICE_NAME }}
+          cluster: ${{ env.ECS_CLUSTER_NAME }}
+          wait-for-service-stability: true
+
+      - uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          channel: "#hypurrquant-deploy-prod"
+          username: "[prod] hypurrquant-strategy-server"
+          fields: author,commit,took,branch
+          text: "[prod] hypurrquant-strategy-server Deployed"
+        env:
+          SLACK_WEBHOOK_URL: ${{ env.SLACK_WEBHOOK_URL }} # required
+        if: always()

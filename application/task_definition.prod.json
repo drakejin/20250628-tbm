@@ -1,0 +1,74 @@
+# 전부 샘플입니다. 사용도 못할뿐더러 문제가 있을 수 있습니다.
+{
+  "cpu": "2048",
+  "memory": "4096",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "family": "tbm20250628-application_prod",
+  "taskRoleArn": "arn:aws:iam::{account_id}:role/tbm20250628-application_prod_task",
+  "executionRoleArn": "arn:aws:iam::{account_id}:role/tbm20250628-application_prod_exec",
+  "containerDefinitions": [
+    {
+      "name": "tbm20250628-application",
+      "image": "{account_id}.dkr.ecr.ap-northeast-2.amazonaws.com/drakejin/tbm20250628/application:latest",
+      "portMappings": [
+        {
+          "containerPort": 8000,
+          "hostPort": 8000,
+          "protocol": "tcp"
+        }
+      ],
+      "essential": true,
+      "command": ["run"],
+      "environment": [
+        {
+          "name": "TZ",
+          "value": "Etc/UTC"
+        },
+        {
+          "name": "ENV",
+          "value": "prod"
+        },
+        {
+          "name": "AWS_DEFAULT_REGION",
+          "value": "ap-northeast-2"
+        },
+        {
+          "name": "AWS_REGION",
+          "value": "ap-northeast-2"
+        }
+      ],
+      "mountPoints": [],
+      "volumesFrom": [],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/prod/hypurrquant-telegram/hypurrquant-telegram",
+          "awslogs-region": "us-east-2",
+          "awslogs-stream-prefix": "/ecs/prod/hypurrquant-telegram"
+        }
+      },
+      "systemControls": []
+    }
+  ],
+  "volumes": [],
+  "placementConstraints": [],
+  "tags": [
+    {
+      "key": "Repository",
+      "value": "github.com/hypurrquant/infrastructure"
+    },
+    {
+      "key": "Environment",
+      "value": "prod"
+    },
+    {
+      "key": "Service",
+      "value": "hypurrquant"
+    },
+    {
+      "key": "Name",
+      "value": "hypurrquant-telegram_prod"
+    }
+  ]
+}

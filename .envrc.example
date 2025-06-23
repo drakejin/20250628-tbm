@@ -1,0 +1,4 @@
+dotenv # set .env files to environment
+
+export AWS_REGION=ap-northeast-2 # lam use default region is us-east-2
+export AWS_DEFAULT_REGION=ap-northeast-2 # lam use default region is us-east-2
