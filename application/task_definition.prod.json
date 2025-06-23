@@ -8,47 +8,56 @@
   "taskRoleArn": "arn:aws:iam::{account_id}:role/tbm20250628-application_prod_task",
   "executionRoleArn": "arn:aws:iam::{account_id}:role/tbm20250628-application_prod_exec",
   "containerDefinitions": [
-    {
-      "name": "tbm20250628-application",
-      "image": "{account_id}.dkr.ecr.ap-northeast-2.amazonaws.com/drakejin/tbm20250628/application:latest",
-      "portMappings": [
+{
+      "cpu" : "2048",
+      "memory" : "4096",
+      "image" : "hashicorp/http-echo:latest",
+      "name" : "tbm20250628-application",
+      "essential" : true,
+      "portMappings" : [
         {
-          "containerPort": 8000,
-          "hostPort": 8000,
-          "protocol": "tcp"
+          "hostPort" : 3000,
+          "protocol" : "tcp",
+          "containerPort" : 3000
         }
       ],
-      "essential": true,
-      "command": ["run"],
-      "environment": [
-        {
-          "name": "TZ",
-          "value": "Etc/UTC"
-        },
-        {
-          "name": "ENV",
-          "value": "prod"
-        },
-        {
-          "name": "AWS_DEFAULT_REGION",
-          "value": "ap-northeast-2"
-        },
-        {
-          "name": "AWS_REGION",
-          "value": "ap-northeast-2"
-        }
-      ],
-      "mountPoints": [],
-      "volumesFrom": [],
-      "logConfiguration": {
-        "logDriver": "awslogs",
-        "options": {
-          "awslogs-group": "/ecs/prod/hypurrquant-telegram/hypurrquant-telegram",
-          "awslogs-region": "us-east-2",
-          "awslogs-stream-prefix": "/ecs/prod/hypurrquant-telegram"
-        }
+      "command" : ["-listen=:3000", "-text=TBM20250628"],
+      "healthCheck" : {
+        "command" : [
+          "CMD-SHELL",
+          "/http-echo -version"
+        ],
+        "retries" : 3,
+        "timeout" : 2,
+        "interval" : 2,
+        "startPeriod" : 2
       },
-      "systemControls": []
+      "environment" : [
+        {
+          "name" : "TZ",
+          "value" : "Etc/UTC"
+        },
+        {
+          "name" : "ENV",
+          "value" : "prod"
+        },
+        {
+          "name" : "AWS_REGION",
+          "value" : "ap-northeast-2"
+        },
+        {
+          "name" : "AWS_DEFAULT_REGION",
+          "value" : "ap-northeast-2"
+        }
+      ],
+      "logConfiguration" : {
+        "logDriver" : "awslogs",
+        "options" : {
+          "awslogs-group" : "/ecs/prod/tbm20250628-application/tbm20250628-application",
+          "awslogs-region" : "ap-northeast-2",
+          "awslogs-stream-prefix" : "/ecs/prod/tbm20250628-application"
+        }
+      }
     }
   ],
   "volumes": [],
@@ -56,7 +65,7 @@
   "tags": [
     {
       "key": "Repository",
-      "value": "github.com/hypurrquant/infrastructure"
+      "value": "github.com/drakejin/tbm20250628"
     },
     {
       "key": "Environment",
@@ -64,11 +73,11 @@
     },
     {
       "key": "Service",
-      "value": "hypurrquant"
+      "value": "tbm20250628"
     },
     {
       "key": "Name",
-      "value": "hypurrquant-telegram_prod"
+      "value": "tbm20250628-application_prod"
     }
   ]
 }

@@ -1,0 +1,15 @@
+services:
+  application:
+    image: hashicorp/http-echo:latest
+    command: ["-listen=:3000", "-text=TBM20250628"]
+    healthcheck:
+      test: ["CMD", "/http-echo", "-version"]
+      interval: 2s
+      timeout: 2s
+      retries: 3
+      start_period: 2s
+    ports:
+      - 3000:3000
+    environment:
+      - TZ=Etc/UTC
+      - PORT=3000

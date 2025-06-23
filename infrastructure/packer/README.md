@@ -1,0 +1,1 @@
+미리 끝내놓을 provisioning이 포함된 AMI

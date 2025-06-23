@@ -47,7 +47,7 @@ data "terraform_remote_state" "service_lb" {
 }
 
 data "aws_route53_zone" "route53_zone" {
-  name         = "hansarangcare.com." # 예전에 구매해둔것 예시일뿐입니다;
+  name         = "sundaytycoon.com." # 예전에 구매해둔것 예시일뿐입니다;
   private_zone = false
 }
 

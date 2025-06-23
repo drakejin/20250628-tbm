@@ -50,16 +50,17 @@ locals {
 
 
   container = {
-    cpu          = 1024
-    memory       = 2048
+    cpu          = 256
+    memory       = 512
     health_check = "/"
 
     name = local.service.name
     port = 3000
 
+
     # repository = aws_ecr_repository.ecr_application.repository_url
     # tag  = "v1.0.0"
-    repository = "nginx"
+    repository = "hashicorp/http-echo"
     tag  = "latest"
 
   }

@@ -62,7 +62,7 @@ resource "aws_lb_listener" "listener_80_arn" {
 
 # aws console 웹 사이트에서 가져온거
 data "aws_acm_certificate" "acm" {
-  domain      = "hansarangcare.com" # 과거 쓰던거
+  domain      = "sundaytycoon.com" # 과거 쓰던거
   statuses = ["ISSUED"]
   key_types = ["RSA_2048"]
   most_recent = true
