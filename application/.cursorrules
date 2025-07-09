@@ -1,0 +1,327 @@
+# Modern Rust Server API Development Rules
+
+## 🎯 Core Principles
+- Follow SOLID principles adapted for Rust (composition over inheritance)
+- Write comprehensive unit and integration tests for every layer
+- Use modern async/await patterns with tokio
+- Generate OpenAPI/Swagger documentation automatically
+- Implement proper layered architecture with clear separation of concerns
+- Leverage Rust's type system for compile-time safety
+- Use dependency injection patterns with trait objects
+
+## 📁 Project Structure
+```
+src/
+├── main.rs                # Application entry point
+├── lib.rs                 # Library root
+├── config/                # Configuration management
+├── handlers/              # HTTP handlers (controllers)
+├── services/              # Business logic layer
+├── repositories/          # Data access layer
+├── entities/              # Database models
+├── dto/                   # Data Transfer Objects
+│   ├── request/           # Request DTOs
+│   └── response/          # Response DTOs
+├── middleware/            # Custom middleware
+├── error/                 # Error handling
+├── utils/                 # Utility functions
+└── tests/                 # Integration tests
+```
+
+## 🔧 Technology Stack
+- **Framework**: Axum 0.7+ (recommended) or Actix-web 4+
+- **Async Runtime**: Tokio 1.32+
+- **ORM**: SeaORM 0.12+ or Diesel 2.1+
+- **Database**: PostgreSQL with sqlx 0.7+
+- **Testing**: tokio-test, mockall, wiremock
+- **Validation**: validator 0.16+
+- **Serialization**: serde 1.0+ with serde_json
+- **Documentation**: utoipa 4.0+ for OpenAPI generation
+- **Error Handling**: thiserror 1.0+
+- **Logging**: tracing 0.1+ with tracing-subscriber
+
+## 📋 Code Generation Rules
+
+### 1. Entity Layer (Database Models)
+```rust
+// src/entities/user.rs
+use serde::{Deserialize, Serialize};
+use sqlx::FromRow;
+use uuid::Uuid;
+use chrono::{DateTime, Utc};
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct User {
+    pub id: Uuid,
+    pub email: String,
+    pub password_hash: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone)]
+pub struct NewUser {
+    pub email: String,
+    pub password_hash: String,
+}
+```
+
+### 2. DTO Layer (API Communication)
+```rust
+// src/dto/request/user_request.rs
+use serde::{Deserialize, Serialize};
+use validator::Validate;
+use utoipa::ToSchema;
+
+#[derive(Debug, Clone, Serialize, Deserialize, Validate, ToSchema)]
+pub struct CreateUserRequest {
+    #[validate(email)]
+    pub email: String,
+
+    #[validate(length(min = 8, max = 128))]
+    pub password: String,
+}
+
+// src/dto/response/user_response.rs
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct UserResponse {
+    pub id: Uuid,
+    pub email: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+```
+
+### 3. Repository Layer with Trait
+```rust
+// src/repositories/user_repository.rs
+use async_trait::async_trait;
+use uuid::Uuid;
+use crate::entities::user::{User, NewUser};
+use crate::error::ApiError;
+
+#[async_trait]
+pub trait UserRepository: Send + Sync {
+    async fn create(&self, user: NewUser) -> Result<User, ApiError>;
+    async fn find_by_id(&self, id: Uuid) -> Result<Option<User>, ApiError>;
+    async fn find_by_email(&self, email: &str) -> Result<Option<User>, ApiError>;
+    // ... other methods
+}
+
+pub struct PostgresUserRepository {
+    pool: PgPool,
+}
+
+#[async_trait]
+impl UserRepository for PostgresUserRepository {
+    async fn create(&self, user: NewUser) -> Result<User, ApiError> {
+        // Implementation with sqlx queries
+        // ...
+    }
+    // ... other implementations
+}
+```
+
+### 4. Service Layer with Business Logic
+```rust
+// src/services/user_service.rs
+use std::sync::Arc;
+use crate::repositories::user_repository::UserRepository;
+use crate::dto::request::user_request::CreateUserRequest;
+use crate::dto::response::user_response::UserResponse;
+use crate::error::ApiError;
+
+pub struct UserService {
+    user_repository: Arc<dyn UserRepository>,
+}
+
+impl UserService {
+    pub fn new(user_repository: Arc<dyn UserRepository>) -> Self {
+        Self { user_repository }
+    }
+
+    pub async fn create_user(&self, request: CreateUserRequest) -> Result<UserResponse, ApiError> {
+        // Business logic: validate, hash password, create user
+        // ...
+    }
+
+    // ... other service methods
+}
+```
+
+### 5. Handler Layer (Controllers)
+```rust
+// src/handlers/user_handler.rs
+use std::sync::Arc;
+use axum::{extract::{Path, State}, http::StatusCode, response::Json};
+use uuid::Uuid;
+use crate::services::user_service::UserService;
+
+pub struct UserHandler {
+    user_service: Arc<UserService>,
+}
+
+impl UserHandler {
+    /// Create a new user
+    #[utoipa::path(
+        post,
+        path = "/users",
+        request_body = CreateUserRequest,
+        responses(
+            (status = 201, description = "User created successfully", body = UserResponse)
+        )
+    )]
+    pub async fn create_user(
+        State(handler): State<Arc<UserHandler>>,
+        Json(request): Json<CreateUserRequest>,
+    ) -> Result<(StatusCode, Json<UserResponse>), ApiError> {
+        request.validate()?;
+        let user = handler.user_service.create_user(request).await?;
+        Ok((StatusCode::CREATED, Json(user)))
+    }
+
+    // ... other handler methods
+}
+```
+
+### 6. Error Handling
+```rust
+// src/error/api_error.rs
+use axum::{http::StatusCode, response::IntoResponse, Json};
+use thiserror::Error;
+use utoipa::ToSchema;
+
+#[derive(Error, Debug)]
+pub enum ApiError {
+    #[error("Database error: {0}")]
+    Database(String),
+    #[error("Validation error: {0}")]
+    Validation(String),
+    #[error("Not found: {0}")]
+    NotFound(String),
+    // ... other error types
+}
+
+impl IntoResponse for ApiError {
+    fn into_response(self) -> axum::response::Response {
+        let (status, message) = match self {
+            ApiError::Database(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg),
+            ApiError::Validation(msg) => (StatusCode::UNPROCESSABLE_ENTITY, msg),
+            // ... other mappings
+        };
+
+        (status, Json(json!({"error": message}))).into_response()
+    }
+}
+```
+
+### 7. Test Examples
+```rust
+// tests/user_test.rs
+#[tokio::test]
+async fn test_create_user_success() {
+    let app = test_setup().await;
+    let server = TestServer::new(app).unwrap();
+
+    let response = server
+        .post("/users")
+        .json(&json!({"email": "test@example.com", "password": "password123"}))
+        .await;
+
+    assert_eq!(response.status_code(), 201);
+}
+
+// Unit test for service layer
+#[tokio::test]
+async fn test_create_user_service() {
+    let mut mock_repo = MockUserRepository::new();
+    mock_repo.expect_find_by_email().returning(|_| Ok(None));
+    mock_repo.expect_create().returning(|_| Ok(/* user */));
+
+    let service = UserService::new(Arc::new(mock_repo));
+    // ... test logic
+}
+```
+
+## 📚 Documentation Generation
+```rust
+// src/main.rs
+use utoipa::OpenApi;
+use utoipa_swagger_ui::SwaggerUi;
+
+#[derive(OpenApi)]
+#[openapi(
+    paths(
+        crate::handlers::user_handler::create_user,
+        // ... other paths
+    ),
+    components(schemas(
+        crate::dto::request::user_request::CreateUserRequest,
+        crate::dto::response::user_response::UserResponse,
+        // ... other schemas
+    ))
+)]
+struct ApiDoc;
+
+#[tokio::main]
+async fn main() {
+    let app = Router::new()
+        .merge(SwaggerUi::new("/swagger-ui")
+            .url("/api-docs/openapi.json", ApiDoc::openapi()));
+}
+```
+
+## 🔧 Key Development Rules
+
+### Code Quality
+- Use `#[derive(Debug)]` on all structs
+- Implement proper error handling with thiserror
+- Use `async/await` patterns consistently
+- Follow Rust naming conventions (snake_case)
+- Use `Arc<>` for shared state
+- Implement proper logging with tracing
+
+### Testing Strategy
+- Unit tests for each service method
+- Integration tests for full API endpoints
+- Use mockall for repository mocking
+- Test both success and error cases
+- Maintain >80% code coverage
+
+### Documentation
+- Add `/// Documentation` comments for all public functions
+- Use `#[utoipa::path]` for all endpoints
+- Generate OpenAPI specs automatically
+- Include examples in documentation
+
+### Performance & Security
+- Use connection pooling for database
+- Implement proper async patterns
+- Validate all inputs with validator
+- Hash passwords with bcrypt
+- Use UUIDs for IDs
+- Sanitize database queries with parameterized queries
+
+## 📝 File Templates
+
+### Cargo.toml dependencies
+```toml
+[dependencies]
+axum = "0.7"
+tokio = { version = "1.32", features = ["full"] }
+sqlx = { version = "0.7", features = ["postgres", "uuid", "chrono"] }
+serde = { version = "1.0", features = ["derive"] }
+uuid = { version = "1.0", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+validator = "0.16"
+utoipa = "4.0"
+utoipa-swagger-ui = "4.0"
+thiserror = "1.0"
+tracing = "0.1"
+async-trait = "0.1"
+
+[dev-dependencies]
+tokio-test = "0.4"
+mockall = "0.11"
+axum-test = "13.0"
+```
